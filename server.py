@@ -2,6 +2,7 @@ from mcp.server.fastmcp import FastMCP
 from fastmcp.resources.resource import Resource
 import os
 import subprocess
+import asyncio
 
 class ManPageResource(Resource):
     content: str
@@ -231,6 +232,45 @@ def create_all_manpages() -> dict:
             errors.append({"tool": tool, "error": result})
     # Any manpages in the directory that are not in the current PATH commands are ignored
     return {"created": created, "skipped": skipped, "errors": errors}
+
+# Command to read and return the content of a registered manpage resource given its URI
+@mcp.tool()
+async def read_manpage_resource(command: str) -> str:
+    """
+    Asynchronously read and return the content of a registered manpage resource for the given command name or URI.
+    If the input is already a URI (starts with 'man://'), use it directly; otherwise, assemble as man://{command}.
+    Returns an error message if the resource is not found or not readable.
+    """
+    command = command.strip()
+    if command.startswith("man://"):
+        uri = command
+    else:
+        command_name = command.lstrip("/").rstrip()
+        uri = f"man://{command_name}"
+
+    try:
+        results = await mcp.read_resource(uri)
+        # mcp.read_resource returns an iterable of ReadResourceContents, get the first and return its content
+        for result in results:
+            return result.content
+        return f"No content found for resource '{uri}'."
+    except Exception as e:
+        return f"Error reading resource '{uri}': {e}"
+
+@mcp.tool()
+async def read_all_commands_resource() -> str:
+    """
+    Asynchronously read and return the content of the resource listing all available commands (man://all-tools).
+    Returns an error message if the resource is not found or not readable.
+    """
+    uri = "man://all-tools"
+    try:
+        results = await mcp.read_resource(uri)
+        for result in results:
+            return result.content
+        return f"No content found for resource '{uri}'."
+    except Exception as e:
+        return f"Error reading resource '{uri}': {e}"
 
 # Run the server
 if __name__ == "__main__":
