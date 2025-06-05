@@ -198,24 +198,38 @@ def create_all_manpages() -> dict:
     Create manpages for all commands in the current PathCommandsResource.
     Skips commands that already have a manpage file in manpages/{tool}.txt.
     Returns a summary dict with 'created', 'skipped', and 'errors'.
+    Also, if a manpage file already exists in the manpages directory, adds it to 'created' for fast population.
     """
     created = []
     skipped = []
     errors = []
+
+    # Ensure manpages directory exists
+    os.makedirs("manpages", exist_ok=True)
+    # Get all manpage files already present
+    existing_manpages = {fname[:-4] for fname in os.listdir("manpages") if fname.endswith(".txt")}
+    print(f"Existing manpages: {sorted(existing_manpages)}")  # Debug print
+
     # Gather all unique commands from _last_path_commands
     commands = set()
     for cmds in _last_path_commands.values():
         commands.update(cmds)
+
     for tool in sorted(commands):
         path = f"manpages/{tool}.txt"
-        if os.path.exists(path):
-            skipped.append(tool)
+        if tool in existing_manpages:
+            try:
+                reg_msg = populate_manpage_resource(tool)
+                created.append(tool)
+            except Exception as e:
+                errors.append({"tool": tool, "error": str(e)})
             continue
         result = create_manpage_file(tool)
         if result.startswith("Man page for") and "saved to" in result:
             created.append(tool)
         else:
             errors.append({"tool": tool, "error": result})
+    # Any manpages in the directory that are not in the current PATH commands are ignored
     return {"created": created, "skipped": skipped, "errors": errors}
 
 # Run the server
