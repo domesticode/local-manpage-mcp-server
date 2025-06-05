@@ -103,6 +103,86 @@ def mwt_discovery_helper() -> str:
         "To discover available tools, check your system's $PATH or try common utilities like 'ls', 'grep', or 'cat'."
     )
 
+def list_all_path_commands():
+    path_dirs = os.environ.get("PATH", "").split(os.pathsep)
+    seen = set()
+    all_commands = {}
+
+    for dir_path in path_dirs:
+        if os.path.isdir(dir_path):
+            try:
+                entries = os.listdir(dir_path)
+            except PermissionError:
+                continue  # Skip directories we can't access
+
+            commands = []
+            for entry in entries:
+                full_path = os.path.join(dir_path, entry)
+                if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+                    if entry not in seen:
+                        seen.add(entry)
+                        commands.append(entry)
+
+            if commands:
+                all_commands[dir_path] = sorted(commands)
+
+    return all_commands
+
+# Store the last result of list_path_commands in a global variable
+_last_path_commands = {}
+
+@mcp.tool()
+def list_path_commands() -> dict:
+    """
+    List all executable commands available in the system's PATH.
+    Returns a dictionary mapping each PATH directory to a sorted list of unique executable names.
+    Also updates the global _last_path_commands for use by other resources/tools.
+    """
+    global _last_path_commands
+    _last_path_commands = list_all_path_commands()
+    # Register the dynamic resource after updating _last_path_commands
+    resource = PathCommandsResource(
+        uri="man://all-tools",
+        name="All available tools in PATH",
+        description="A list of all executable commands found in the system's PATH (populated by list_path_commands).",
+        mime_type="text/plain",
+        tags={"man", "all-tools"},
+    )
+    mcp.add_resource(resource)
+    return _last_path_commands
+
+# Dynamic resource: list of all available tools in PATH (from last list_path_commands call)
+class PathCommandsResource(Resource):
+    async def read(self) -> str:
+        commands = set()
+        for cmds in _last_path_commands.values():
+            commands.update(cmds)
+        return "\n".join(sorted(commands)) if commands else "No commands loaded. Please run list_path_commands first."
+
+# Tool: Check if a tool is available in PATH (from last list_path_commands call)
+@mcp.tool()
+def is_tool_available(tool: str) -> bool:
+    """
+    Check if the given tool is available in the system's PATH.
+    Returns True if available, False otherwise.
+    Uses the last result from list_path_commands.
+    """
+    all_tools = set()
+    for cmds in _last_path_commands.values():
+        all_tools.update(cmds)
+    return tool in all_tools
+
+# Workflow prompt: explains the order of operations for checking tool availability
+@mcp.prompt()
+def mwt_path_commands_workflow() -> str:
+    """Workflow for checking tool availability"""
+    return (
+        "To check if a tool is available in your system's PATH, first run the `list_path_commands` tool. "
+        "This will scan your PATH and register all available commands. "
+        "After that, you can use the `is_tool_available` tool to check if a specific tool is present. "
+        "If you have installed new tools or changed your PATH, run `list_path_commands` again to refresh the list."
+    )
+
 # Run the server
 if __name__ == "__main__":
     mcp.run()
