@@ -2,7 +2,8 @@ from mcp.server.fastmcp import FastMCP
 from fastmcp.resources.resource import Resource
 import os
 import subprocess
-import asyncio
+import time
+import concurrent.futures
 
 class ManPageResource(Resource):
     content: str
@@ -191,46 +192,69 @@ def mwt_create_all_manpages_workflow() -> str:
         "This will automatically populate the command resource and then generate manpages for all commands that do not already have one."
     )
 
+# Helper function to process a single tool
+def _process_tool(tool: str, existing_manpages: set) -> tuple[str, bool, str]:
+    """
+    Process an individual tool: if a manpage exists, register it; otherwise, create it.
+    Returns (tool, success, error_message).
+    """
+    try:
+        if tool in existing_manpages:
+            populate_manpage_resource(tool)
+            return (tool, True, "")
+        else:
+            result = create_manpage_file(tool)
+            if result.startswith("Man page for") and "saved to" in result:
+                return (tool, True, "")
+            else:
+                return (tool, False, result)
+    except Exception as e:
+        return (tool, False, str(e))
+
 @mcp.tool()
 def create_all_manpages() -> dict:
-    populate_command_resource_tool()
-
     """
-    Create manpages for all commands in the current PathCommandsResource.
-    Skips commands that already have a manpage file in manpages/{tool}.txt.
+    Create manpages for all commands in the current PathCommandsResource using parallel execution.
+    Skips commands that already have a manpage file, but still registers them.
     Returns a summary dict with 'created', 'skipped', and 'errors'.
-    Also, if a manpage file already exists in the manpages directory, adds it to 'created' for fast population.
     """
-    created = []
-    skipped = []
-    errors = []
+    start_time = time.time()
+    # Refresh command list
+    populate_command_resource_tool()
 
     # Ensure manpages directory exists
     os.makedirs("manpages", exist_ok=True)
-    # Get all manpage files already present
     existing_manpages = {fname[:-4] for fname in os.listdir("manpages") if fname.endswith(".txt")}
-    print(f"Existing manpages: {sorted(existing_manpages)}")  # Debug print
 
-    # Gather all unique commands from _last_path_commands
+    # Gather all unique commands
     commands = set()
     for cmds in _last_path_commands.values():
         commands.update(cmds)
 
-    for tool in sorted(commands):
-        path = f"manpages/{tool}.txt"
-        if tool in existing_manpages:
+    created = []
+    skipped = []
+    errors = []
+
+    # Use ThreadPoolExecutor for parallel IO-bound tasks
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(_process_tool, tool, existing_manpages): tool for tool in sorted(commands)}
+        for future in concurrent.futures.as_completed(futures):
+            tool = futures[future]
+            success = False
             try:
-                reg_msg = populate_manpage_resource(tool)
-                created.append(tool)
+                tool_name, success, error_msg = future.result()
             except Exception as e:
-                errors.append({"tool": tool, "error": str(e)})
-            continue
-        result = create_manpage_file(tool)
-        if result.startswith("Man page for") and "saved to" in result:
-            created.append(tool)
-        else:
-            errors.append({"tool": tool, "error": result})
-    # Any manpages in the directory that are not in the current PATH commands are ignored
+                success = False
+                error_msg = str(e)
+            if success:
+                created.append(tool)
+            else:
+                errors.append({"tool": tool, "error": error_msg})
+
+    end_time = time.time()
+    duration = end_time - start_time
+    print(f"create_all_manpages execution time with parallelism: {duration:.2f} seconds")
+
     return {"created": created, "skipped": skipped, "errors": errors}
 
 # Command to read and return the content of a registered manpage resource given its URI
@@ -250,7 +274,6 @@ async def read_manpage_resource(command: str) -> str:
 
     try:
         results = await mcp.read_resource(uri)
-        # mcp.read_resource returns an iterable of ReadResourceContents, get the first and return its content
         for result in results:
             return result.content
         return f"No content found for resource '{uri}'."
