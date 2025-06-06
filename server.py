@@ -48,12 +48,10 @@ def mwt_guide() -> str:
         "Welcome to the Man Which Tool server!\n\n"
         "This server exposes the following capabilities for managing and accessing man pages of system commands as MCP resources:\n"
         "- Register a man page by extracting it from the system (create_manpage_file).\n"
-        "- Register a man page from an existing file (register_manpage_resource).\n"
         "- Check if a command exists in your PATH (is_command_available).\n"
         "- List all available commands in PATH as a resource (register_command_resource_tool and read_all_commands_resource).\n"
         "- Generate man pages for all commands in PATH in parallel (create_all_manpage_files).\n\n"
         "To register a single man page, use the `create_manpage_file` function with the command name (e.g., 'grep').\n"
-        "To register an already-extracted man page file, use `register_manpage_resource` with the command name.\n"
         "To discover whether a command is installed, use `is_command_available` with the command name.\n"
         "To list all commands as a resource, run `register_command_resource_tool` and then `read_all_commands_resource`.\n"
         "To generate man pages for all commands at once, run `create_all_manpage_files`."
@@ -65,7 +63,6 @@ def mwt_discovery_helper() -> str:
         "Server Capabilities:\n"
         "- MCP Tools (functions):\n"
         "  • create_manpage_file(command_name): Extract a man page from the system and register it as a resource.\n"
-        "  • register_manpage_resource(command_name): Load and register a man page from an existing file.\n"
         "  • is_command_available(command_name): Check if a shell command exists in your PATH.\n"
         "  • register_command_resource_tool(): Refresh and register the list of all commands as a resource (man://all-tools).\n"
         "  • create_all_manpage_files(): Generate and register man pages for all commands in your PATH in parallel.\n"
@@ -133,7 +130,7 @@ def find_all_commands() -> dict[str, list[str]]:
 def _process_command(command_name: str, existing_manpages: set[str]) -> tuple[str, bool, str]:
     try:
         if command_name in existing_manpages:
-            register_manpage_resource(command_name)
+            _register_manpage_resource(command_name)
             return (command_name, True, "")
         else:
             result = create_manpage_file(command_name)
@@ -144,6 +141,24 @@ def _process_command(command_name: str, existing_manpages: set[str]) -> tuple[st
     except Exception as e:
         return (command_name, False, str(e))
 
+def _register_manpage_resource(command_name: str) -> None:
+    path = f"manpages/{command_name}.txt"
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            content = f.read()
+        resource = ManPageResource(
+            uri=f"man://{command_name}",
+            name=f"Man page for {command_name}",
+            description=f"Manual page for {command_name}",
+            mime_type="text/plain",
+            tags={"man", command_name},
+            content=content,
+        )
+        mcp.add_resource(resource)
+        print(f"MCP: Loaded man page for {command_name}")
+    else:
+        print(f"Man page for {command_name} not found at {path}")
+        
 # ----------------------
 # MCP Tools
 # ----------------------
@@ -189,39 +204,23 @@ def create_manpage_file(command_name: str) -> str:
         )
         with open(path, "wb") as f:
             f.write(col.stdout)
-        registration_message = register_manpage_resource(command_name)
-        return f"Man page for {command_name} saved to {path}. {registration_message}"
+        # Use internal helper to register
+        _register_manpage_resource(command_name)
+        return f"Man page for {command_name} saved to {path} and registered."
     except subprocess.CalledProcessError as e:
         return f"Failed to extract man page for {command_name}: {e.stderr.decode().strip()}"
     except Exception as e:
         return f"Error: {e}"
 
 @mcp.tool()
-def register_manpage_resource(command_name: str) -> str:
-    path = f"manpages/{command_name}.txt"
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            content = f.read()
-        resource = ManPageResource(
-            uri=f"man://{command_name}",
-            name=f"Man page for {command_name}",
-            description=f"Manual page for {command_name}",
-            mime_type="text/plain",
-            tags={"man", command_name},
-            content=content,
-        )
-        mcp.add_resource(resource)
-        print(f"MCP: Loaded man page for {command_name}")
-        return f"Man page for {command_name} loaded and registered."
-    else:
-        print(f"Man page for {command_name} not found at {path}")
-        return f"Man page for {command_name} not found at {path}."
-
-@mcp.tool()
 def create_all_manpage_files() -> dict:
-    # NOTE: "create_all_manpage_files" runs parallel threads that each call "register_manpage_resource", which calls "mcp.add_resource".
-    # If "mcp.add_resource" or the underlying MCP implementation is not thread-safe, this could cause race conditions or missing registrations.
-    # In that case, consider collecting all resource payloads in threads and invoking "mcp.add_resource" sequentially in the main thread instead.
+    # NOTE: "create_all_manpage_files" runs parallel threads that each call the internal
+    # helper "_register_manpage_resource", which calls "mcp.add_resource".
+    # If "mcp.add_resource" or the underlying MCP implementation is not thread-safe,
+    # this could cause race conditions or missing registrations.
+    # In that case, consider collecting all resource payloads in threads and invoking
+    # "mcp.add_resource" sequentially in the main thread instead.
+
     start_time = time.time()
     register_command_resource_tool()
 
