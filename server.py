@@ -43,7 +43,7 @@ mcp = FastMCP("Man Which Tool Server", version="0.0.1")
 # ----------------------
 
 @mcp.prompt()
-def mwt_guide() -> str:
+def guide() -> str:
     return (
         "Welcome to the Man Which Tool server!\n\n"
         "This server exposes the following capabilities for managing and accessing man pages of system commands as MCP resources:\n"
@@ -58,7 +58,7 @@ def mwt_guide() -> str:
     )
 
 @mcp.prompt()
-def mwt_discovery_helper() -> str:
+def discovery_helper() -> str:
     return (
         "Server Capabilities:\n"
         "- MCP Tools (functions):\n"
@@ -69,17 +69,17 @@ def mwt_discovery_helper() -> str:
         "  • read_manpage_resource(command_identifier): Read content of a registered man page resource by command name or URI.\n"
         "  • read_all_commands_resource(): Read and return the list of all commands registered as a resource.\n"
         "- Prompts (user guidance):\n"
-        "  • mwt_guide: Overview and usage instructions.\n"
-        "  • mwt_discovery_helper: This capability listing.\n"
-        "  • mwt_path_commands_workflow: How to check command availability.\n"
-        "  • mwt_create_all_manpage_files_workflow: How to generate all man pages.\n"
+        "  • guide: Overview and usage instructions.\n"
+        "  • discovery_helper: This capability listing.\n"
+        "  • path_commands_workflow: How to check command availability.\n"
+        "  • create_all_manpage_files_workflow: How to generate all man pages.\n"
         "- Resources:\n"
         "  • ManPageResource (man://{command_name}): Individual man page.\n"
         "  • PathCommandsResource (man://all-tools): List of all executable commands in PATH.\n"
     )
 
 @mcp.prompt()
-def mwt_path_commands_workflow() -> str:
+def path_commands_workflow() -> str:
     return (
         "Workflow: Checking Command Availability\n"
         "1. Run `register_command_resource_tool` to refresh the list of commands.\n"
@@ -88,7 +88,7 @@ def mwt_path_commands_workflow() -> str:
     )
 
 @mcp.prompt()
-def mwt_create_all_manpage_files_workflow() -> str:
+def create_all_manpage_files_workflow() -> str:
     return (
         "Workflow: Generating All Man Pages in Parallel\n"
         "1. Run `register_command_resource_tool` to ensure command list is current.\n"

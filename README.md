@@ -37,3 +37,29 @@ uv run mcp dev server.py
 One goal of this project is to provide a self-explanatory server that exposes usage information as a prompt for your host application. This way, your LLM can describe the workflow automatically.
 
 In addition, you must run the `create_all_manpage_files` tool to generate the MCP resources based on the commands available on your system. After execution, all relevant man pages should be accessible as MCP resources.
+
+### With the Inspector
+
+#### Discover prompts for yourself
+![Available Prompts](docs/images/inspector_usage_guide_prompt.png)
+1. Go to Prompts
+2. Click List Prompts
+3. e.g. Select guide and click Get Prompt
+
+#### Create the manpage resources
+![Create all manpages](docs/images/inspector_usage_list_tools.png)
+1. Go to Tools
+2. Click List Tools
+3. Select create_all_manpage_files and click Run Tool
+
+example response:
+![Create all manpages response](docs/images/inspector_usage_manpages_response.png)
+
+Now you can
+1. Go to Resources
+2. Click List Resources
+3. Select a man page e.g. `Man page for 7z`
+4. Check the response on the right side
+
+example response:
+![7z manual as resource](docs/images/inspector_usage_7z_resource.png)
