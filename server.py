@@ -16,42 +16,42 @@ mcp = FastMCP("Man Which Tool Server", version="0.0.1")
 
 # Tool to load a man page file and register it as a resource (exposed for demo purposes)
 @mcp.tool()
-def populate_manpage_resource(tool: str) -> str:
+def populate_manpage_resource(command_name: str) -> str:
     """
-    Load the man page for the given tool from manpages/{tool}.txt and register it as a resource.
+    Load the man page for the given command from manpages/{command_name}.txt and register it as a resource.
     """
-    path = f"manpages/{tool}.txt"
+    path = f"manpages/{command_name}.txt"
     if os.path.exists(path):
         with open(path, "r") as f:
             content = f.read()
         resource = ManPageResource(
-            uri=f"man://{tool}",
-            name=f"Man page for {tool}",
-            description=f"Manual page for {tool}",
+            uri=f"man://{command_name}",
+            name=f"Man page for {command_name}",
+            description=f"Manual page for {command_name}",
             mime_type="text/plain",
-            tags={"man", tool},
+            tags={"man", command_name},
             content=content,
         )
         mcp.add_resource(resource)
-        print(f"MCP: Loaded man page for {tool}")
-        return f"Man page for {tool} loaded and registered."
+        print(f"MCP: Loaded man page for {command_name}")
+        return f"Man page for {command_name} loaded and registered."
     else:
-        print(f"Man page for {tool} not found at {path}")
-        return f"Man page for {tool} not found at {path}."
+        print(f"Man page for {command_name} not found at {path}")
+        return f"Man page for {command_name} not found at {path}."
 
 # Main entrypoint tool: extract and register a man page in one step
 @mcp.tool()
-def create_manpage_file(tool: str) -> str:
+def create_manpage_file(command_name: str) -> str:
     """
-    Extract the man page for the given tool and save it as manpages/{tool}.txt.
+    Extract the man page for the given command and save it as manpages/{command_name}.txt.
     If successful, also register it as a resource.
     """
     os.makedirs("manpages", exist_ok=True)
-    path = f"manpages/{tool}.txt"
+    path = f"manpages/{command_name}.txt"
     try:
-        # Run 'man tool | col -b'
+        # Run 'man command_name | col -b'
         result = subprocess.run(
-            ["man", tool],
+            ["man", command_name],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
@@ -66,43 +66,41 @@ def create_manpage_file(tool: str) -> str:
         with open(path, "wb") as f:
             f.write(col.stdout)
         # Call populate_manpage_resource after successful file creation
-        reg_msg = populate_manpage_resource(tool)
-        return f"Man page for {tool} saved to {path}. {reg_msg}"
+        registration_message = populate_manpage_resource(command_name)
+        return f"Man page for {command_name} saved to {path}. {registration_message}"
     except subprocess.CalledProcessError as e:
-        return f"Failed to extract man page for {tool}: {e.stderr.decode().strip()}"
+        return f"Failed to extract man page for {command_name}: {e.stderr.decode().strip()}"
     except Exception as e:
         return f"Error: {e}"
 
-# Guide prompt: updated to reflect current workflow
 @mcp.prompt()
 def mwt_guide() -> str:
-    """Server Guide"""
     return (
         "Welcome to the Man Which Tool server!\n\n"
-        "This server exposes man pages for tools available on your system as resources. "
-        "To add a man page as a resource, use the `create_manpage_file` tool with the tool name (e.g., 'grep'). "
+        "This server exposes man pages for commands available on your system as resources. "
+        "To add a man page as a resource, use the `create_manpage_file` function with the command name (e.g., 'grep'). "
         "This will extract the man page, save it to the manpages directory, and register it as a resource.\n\n"
-        "For demonstration purposes, you can also use the `populate_manpage_resource` tool to register a man page "
+        "For demonstration purposes, you can also use the `populate_manpage_resource` function to register a man page "
         "from an existing file in the manpages directory.\n\n"
         "Once registered, man pages are available as resources (e.g., man://grep) for LLMs and clients to access."
     )
 
-# Discovery prompt: updated for clarity and completeness
 @mcp.prompt()
 def mwt_discovery_helper() -> str:
-    """Server discovery"""
     return (
         "Capabilities of the Man Which Tool server:\n"
-        "- Tools:\n"
-        "  • create_manpage_file(tool): Extract and register a man page as a resource (recommended entrypoint).\n"
-        "  • populate_manpage_resource(tool): Register a man page from an existing file (demo/advanced usage).\n"
+        "- Functions (MCP tools):\n"
+        "  • create_manpage_file(command_name): Extract and register a man page as a resource.\n"
+        "  • populate_manpage_resource(command_name): Register a man page from an existing file.\n"
+        "  • is_command_available(command_name): Check if a command exists in your PATH.\n"
+        "  • create_all_manpages(): Generate man pages for all available commands.\n"
         "- Prompts:\n"
         "  • mwt_guide: Overview and usage instructions.\n"
         "  • mwt_discovery_helper: This capability listing.\n"
         "- Resources:\n"
         "  • Man pages registered as resources (e.g., man://grep).\n"
         "\n"
-        "To discover available tools, check your system's $PATH or try common utilities like 'ls', 'grep', or 'cat'."
+        "To discover available commands, check your system's $PATH or use `populate_command_resource_tool`."
     )
 
 def populate_command_resource():
@@ -153,7 +151,7 @@ def populate_command_resource_tool() -> dict:
     mcp.add_resource(resource)
     return _last_path_commands
 
-# Dynamic resource: list of all available tools in PATH (from last list_path_commands call)
+# Dynamic resource: list of all available commands in PATH (from last list_path_commands call)
 class PathCommandsResource(Resource):
     async def read(self) -> str:
         commands = set()
@@ -161,27 +159,25 @@ class PathCommandsResource(Resource):
             commands.update(cmds)
         return "\n".join(sorted(commands)) if commands else "No commands loaded. Please run populate_command_resource_tool first."
 
-# Tool: Check if a tool is available in PATH (from last list_path_commands call)
+# Tool: Check if a command is available in PATH (from last list_path_commands call)
 @mcp.tool()
-def is_tool_available(tool: str) -> bool:
+def is_command_available(command_name: str) -> bool:
     """
-    Check if the given tool is available in the system's PATH.
+    Check if the given command is available in the system's PATH.
     Returns True if available, False otherwise.
     Uses the last result from populate_command_resource_tool.
     """
     populate_command_resource_tool()
-    all_tools = set()
+    all_commands = set()
     for cmds in _last_path_commands.values():
-        all_tools.update(cmds)
-    return tool in all_tools
+        all_commands.update(cmds)
+    return command_name in all_commands
 
-# Workflow prompt: explains the order of operations for checking tool availability
 @mcp.prompt()
 def mwt_path_commands_workflow() -> str:
-    """Workflow for checking tool availability"""
     return (
-        "To check if a tool is available in your system's PATH, simply use the `is_tool_available` tool. "
-        "If you have installed new tools or changed your PATH, run `populate_command_resource_tool` again to refresh the list."
+        "To check if a command is available in your system's PATH, use the `is_command_available` function. "
+        "If you have installed new commands or modified your PATH, run `populate_command_resource_tool` again to refresh the list."
     )
 
 @mcp.prompt()
@@ -192,24 +188,24 @@ def mwt_create_all_manpages_workflow() -> str:
         "This will automatically populate the command resource and then generate manpages for all commands that do not already have one."
     )
 
-# Helper function to process a single tool
-def _process_tool(tool: str, existing_manpages: set) -> tuple[str, bool, str]:
+# Helper function to process a single command
+def _process_command(command_name: str, existing_manpages: set) -> tuple[str, bool, str]:
     """
-    Process an individual tool: if a manpage exists, register it; otherwise, create it.
-    Returns (tool, success, error_message).
+    Process an individual command: if a manpage exists, register it; otherwise, create it.
+    Returns (command_name, success, error_message).
     """
     try:
-        if tool in existing_manpages:
-            populate_manpage_resource(tool)
-            return (tool, True, "")
+        if command_name in existing_manpages:
+            populate_manpage_resource(command_name)
+            return (command_name, True, "")
         else:
-            result = create_manpage_file(tool)
+            result = create_manpage_file(command_name)
             if result.startswith("Man page for") and "saved to" in result:
-                return (tool, True, "")
+                return (command_name, True, "")
             else:
-                return (tool, False, result)
+                return (command_name, False, result)
     except Exception as e:
-        return (tool, False, str(e))
+        return (command_name, False, str(e))
 
 @mcp.tool()
 def create_all_manpages() -> dict:
@@ -237,19 +233,19 @@ def create_all_manpages() -> dict:
 
     # Use ThreadPoolExecutor for parallel IO-bound tasks
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = {executor.submit(_process_tool, tool, existing_manpages): tool for tool in sorted(commands)}
+        futures = {executor.submit(_process_command, cmd, existing_manpages): cmd for cmd in sorted(commands)}
         for future in concurrent.futures.as_completed(futures):
-            tool = futures[future]
+            cmd = futures[future]
             success = False
             try:
-                tool_name, success, error_msg = future.result()
+                name, success, error_msg = future.result()
             except Exception as e:
                 success = False
                 error_msg = str(e)
             if success:
-                created.append(tool)
+                created.append(cmd)
             else:
-                errors.append({"tool": tool, "error": error_msg})
+                errors.append({"command": cmd, "error": error_msg})
 
     end_time = time.time()
     duration = end_time - start_time
@@ -259,18 +255,17 @@ def create_all_manpages() -> dict:
 
 # Command to read and return the content of a registered manpage resource given its URI
 @mcp.tool()
-async def read_manpage_resource(command: str) -> str:
+async def read_manpage_resource(command_identifier: str) -> str:
     """
     Asynchronously read and return the content of a registered manpage resource for the given command name or URI.
-    If the input is already a URI (starts with 'man://'), use it directly; otherwise, assemble as man://{command}.
+    If the input is already a URI (starts with 'man://'), use it directly; otherwise, assemble as man://{command_identifier}.
     Returns an error message if the resource is not found or not readable.
     """
-    command = command.strip()
-    if command.startswith("man://"):
-        uri = command
+    cmd = command_identifier.strip()
+    if cmd.startswith("man://"):
+        uri = cmd
     else:
-        command_name = command.lstrip("/").rstrip()
-        uri = f"man://{command_name}"
+        uri = f"man://{cmd}"
 
     try:
         results = await mcp.read_resource(uri)
