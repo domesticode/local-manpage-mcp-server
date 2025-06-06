@@ -168,6 +168,7 @@ def is_tool_available(tool: str) -> bool:
     Returns True if available, False otherwise.
     Uses the last result from populate_command_resource_tool.
     """
+    populate_command_resource_tool()
     all_tools = set()
     for cmds in _last_path_commands.values():
         all_tools.update(cmds)
@@ -178,9 +179,7 @@ def is_tool_available(tool: str) -> bool:
 def mwt_path_commands_workflow() -> str:
     """Workflow for checking tool availability"""
     return (
-        "To check if a tool is available in your system's PATH, first run the `populate_command_resource_tool` tool. "
-        "This will scan your PATH and register all available commands. "
-        "After that, you can use the `is_tool_available` tool to check if a specific tool is present. "
+        "To check if a tool is available in your system's PATH, simply use the `is_tool_available` tool. "
         "If you have installed new tools or changed your PATH, run `populate_command_resource_tool` again to refresh the list."
     )
 
@@ -188,13 +187,14 @@ def mwt_path_commands_workflow() -> str:
 def mwt_create_all_manpages_workflow() -> str:
     """Workflow for creating all manpages"""
     return (
-        "To create manpages for all commands, first run the `populate_command_resource_tool` tool to populate the command resource. "
-        "This ensures the list of commands is up to date. "
-        "Then run the `create_all_manpages` tool to generate manpages for all commands that do not already have one."
+        "To create manpages for all commands, run the `create_all_manpages` tool. "
+        "This will automatically populate the command resource and then generate manpages for all commands that do not already have one."
     )
 
 @mcp.tool()
 def create_all_manpages() -> dict:
+    populate_command_resource_tool()
+
     """
     Create manpages for all commands in the current PathCommandsResource.
     Skips commands that already have a manpage file in manpages/{tool}.txt.
