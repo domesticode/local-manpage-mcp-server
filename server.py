@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# man-which-tool: an MCP server that registers/manages man pages as resources
+# local-manpage-mcp-server: an MCP server that registers/manages man pages as resources
 
 import concurrent.futures
 import os
