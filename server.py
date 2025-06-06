@@ -1,9 +1,13 @@
-from mcp.server.fastmcp import FastMCP
-from fastmcp.resources.resource import Resource
+# SPDX-License-Identifier: MIT
+# man-which-tool: an MCP server that registers/manages man pages as resources
+
+import concurrent.futures
 import os
 import subprocess
 import time
-import concurrent.futures
+
+from fastmcp.resources.resource import Resource
+from mcp.server.fastmcp import FastMCP
 
 # ----------------------
 # Resource Classes
@@ -60,7 +64,7 @@ def mwt_discovery_helper() -> str:
     return (
         "Server Capabilities:\n"
         "- MCP Tools (functions):\n"
-        "  • create_manpage_file(command_name): Extract and extract a man page and register it as a resource.\n"
+        "  • create_manpage_file(command_name): Extract a man page from the system and register it as a resource.\n"
         "  • register_manpage_resource(command_name): Load and register a man page from an existing file.\n"
         "  • is_command_available(command_name): Check if a shell command exists in your PATH.\n"
         "  • register_command_resource_tool(): Refresh and register the list of all commands as a resource (man://all-tools).\n"
@@ -100,7 +104,7 @@ def mwt_create_all_manpage_files_workflow() -> str:
 # Helper Functions
 # ----------------------
 
-def register_command_resource() -> dict:
+def find_all_commands() -> dict[str, list[str]]:
     path_dirs = os.environ.get("PATH", "").split(os.pathsep)
     seen = set()
     all_commands = {}
@@ -125,7 +129,8 @@ def register_command_resource() -> dict:
 
     return all_commands
 
-def _process_command(command_name: str, existing_manpages: set) -> tuple[str, bool, str]:
+
+def _process_command(command_name: str, existing_manpages: set[str]) -> tuple[str, bool, str]:
     try:
         if command_name in existing_manpages:
             register_manpage_resource(command_name)
@@ -146,7 +151,7 @@ def _process_command(command_name: str, existing_manpages: set) -> tuple[str, bo
 @mcp.tool()
 def register_command_resource_tool() -> dict:
     global _last_path_commands
-    _last_path_commands = register_command_resource()
+    _last_path_commands = find_all_commands()
     resource = PathCommandsResource(
         uri="man://all-tools",
         name="All available commands in PATH",
@@ -214,6 +219,9 @@ def register_manpage_resource(command_name: str) -> str:
 
 @mcp.tool()
 def create_all_manpage_files() -> dict:
+    # NOTE: "create_all_manpage_files" runs parallel threads that each call "register_manpage_resource", which calls "mcp.add_resource".
+    # If "mcp.add_resource" or the underlying MCP implementation is not thread-safe, this could cause race conditions or missing registrations.
+    # In that case, consider collecting all resource payloads in threads and invoking "mcp.add_resource" sequentially in the main thread instead.
     start_time = time.time()
     register_command_resource_tool()
 
@@ -225,7 +233,6 @@ def create_all_manpage_files() -> dict:
         commands.update(cmds)
 
     created = []
-    skipped = []
     errors = []
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -245,7 +252,7 @@ def create_all_manpage_files() -> dict:
     duration = end_time - start_time
     print(f"create_all_manpage_files execution time with parallelism: {duration:.2f} seconds")
 
-    return {"created": created, "skipped": skipped, "errors": errors}
+    return {"created": created, "errors": errors}
 
 @mcp.tool()
 async def read_manpage_resource(command_identifier: str) -> str:
