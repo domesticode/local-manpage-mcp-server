@@ -1,5 +1,10 @@
 # local-manpage-mcp-server
 
+## Submission Demo Video
+
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/RtC1YO42TQo/0.jpg)](https://youtu.be/RtC1YO42TQo)
+
+
 ## Summary
 `local-manpage-mcp-server` is an MCP server that extracts and exposes the man pages of all executables in your `$PATH` as MCP resources. Its primary goal is to give an LLM (or any MCP client) direct access to up-to-date documentation for the commands installed on the host system. This server is intended to run on Linux distributions only (see **Disclaimer** below).
 
